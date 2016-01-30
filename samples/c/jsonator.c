@@ -48,6 +48,16 @@ char * generateJSON(JsonMessage passedrpi ) {
 	sprintf(buffer, "%.2f", passedrpi.sine);
 	strcat(jsonReturned, buffer);
 
+	strcat(jsonReturned, "\"temperature\":");
+		sprintf(buffer, "%.2f", passedrpi.temperature);
+		strcat(jsonReturned, buffer);
+		strcat(jsonReturned, ",");
+
+		strcat(jsonReturned, "\"humidity\":");
+			sprintf(buffer, "%.2f", passedrpi.humidity);
+			strcat(jsonReturned, buffer);
+			strcat(jsonReturned, ",");
+
 	strcat(jsonReturned, "}");
 	strcat(jsonReturned, "}");
 

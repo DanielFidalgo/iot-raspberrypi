@@ -9,16 +9,22 @@
  * Contributors:
  *   Jeffrey Dare - Initial Contribution
  *******************************************************************************/
-
+#include <wiringPi.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <math.h>
 #include <signal.h>
 #include "iot.h"
 #include "MQTTAsync.h"
+#include "DHT11.h"
 #include <syslog.h>
+#include <ctype.h>
+#define MAX_TIME 85
+int DHT11PIN;
+int dht11_val[5] = { 0, 0, 0, 0, 0 };
 
 char configFile[50] = "/etc/iotsample-raspberrypi/device.cfg";
 float PI = 3.1415926;
@@ -33,6 +39,7 @@ char subscribeTopic[MAXBUF] = "iot-2/cmd/reboot/fmt/json";
 // registered mode = 1
 // quickstart mode = 0
 int isRegistered = 0;
+int isinit = 0;
 
 MQTTAsync client;
 
@@ -69,7 +76,7 @@ int reconnect(MQTTAsync* client, int isRegistered,
 		char* username, char* passwd);
 
 int main(int argc, char **argv) {
-
+	InitDHT(1);
 	char* json;
 
 	int lckStatus;
@@ -150,7 +157,7 @@ int main(int argc, char **argv) {
 	}
 	while (1) {
 		JsonMessage json_message = { DEVICE_NAME, getCPUTemp(), sineVal(
-				MIN_VALUE, MAX_VALUE, 16, count), GetCPULoad() };
+				MIN_VALUE, MAX_VALUE, 16, count), GetCPULoad() , getHumidity(), getTemp()};
 		json = generateJSON(json_message);
 		res = publishMQTTMessage(&client, publishTopic, json);
 		syslog(LOG_DEBUG, "Posted the message with result code = %d\n", res);
@@ -254,9 +261,9 @@ char *trim(char *str) {
 	len = strlen(str);
 	endp = str + len;
 
-	while (isspace(*(++frontp)))
+	while (::isspace(*(++frontp)))
 		;
-	while (isspace(*(--endp)) && endp != frontp)
+	while (::isspace(*(--endp)) && endp != frontp)
 		;
 
 	if (str + len - 1 != endp)
@@ -313,3 +320,86 @@ int get_config(char * filename, struct config * configstr) {
 
 	return 1;
 }
+
+
+
+
+ 
+
+int InitDHT(int pinval)
+{
+       if (wiringPiSetup() == -1)
+       {
+              isinit = 0;
+              return isinit;
+       }
+       DHT11PIN = pinval;
+       // initialize pin
+ 
+
+       isinit = 1;
+       return isinit;
+}
+ 
+
+float getTemp()
+{
+       return (float)(dht11_val[2] + dht11_val[3] / 10);
+}
+ 
+
+float getHumidity()
+{
+       return (float)(dht11_val[0] + dht11_val[1] / 10);
+}
+ 
+
+int dht11_read_val()
+{
+       if (isinit==0)
+              return 0;
+       uint8_t lststate = HIGH;
+       uint8_t counter = 0;
+       uint8_t j = 0, i;
+       float farenheit;
+       for (i = 0; i < 5; i++)
+              dht11_val[i] = 0;
+       pinMode(DHT11PIN, OUTPUT);
+       digitalWrite(DHT11PIN, LOW);
+       delay(18);
+       digitalWrite(DHT11PIN, HIGH);
+       delayMicroseconds(40);
+       pinMode(DHT11PIN, INPUT);
+       for (i = 0; i < MAX_TIME; i++)
+       {
+              counter = 0;
+              while (digitalRead(DHT11PIN) == lststate){
+                     counter++;
+                     delayMicroseconds(1);
+                     if (counter == 255)
+                           break;
+              }
+              lststate = digitalRead(DHT11PIN);
+              if (counter == 255)
+                     break;
+              // top 3 transistions are ignored 
+              if ((i >= 4) && (i % 2 == 0)){
+                     dht11_val[j / 8] <<= 1;
+                     if (counter>16)
+                           dht11_val[j / 8] |= 1;
+                     j++;
+              }
+       }
+       // verify cheksum and print the verified data 
+       if ((j >= 40) && (dht11_val[4] == ((dht11_val[0] + dht11_val[1] + dht11_val[2] + dht11_val[3]) & 0xFF)))
+       {
+              if ((dht11_val[0] == 0) && (dht11_val[2] == 0))
+                     return 0;
+              return 1;
+       }
+       return 0;
+}
+
+
+
+

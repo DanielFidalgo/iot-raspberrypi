@@ -24,6 +24,8 @@
 	  float cputemp;
 	  float sine;
 	  float cpuload;
+	  float humidity;
+	  float temperature;
   };
 
   /* This is the short hand for json */
